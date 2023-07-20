@@ -7,9 +7,9 @@ void drawCoordinate(int x, int y)
 {
   rectMode(CENTER);
   
-  fill(255, 0, 0);
+  fill(0, 255, 0);
   rect(x, y, 5, 5);
-  textSize(24);
+  textSize(48);
   text("(" + x + "," + y + ")", x + 10, y + 15);  
 }
 
