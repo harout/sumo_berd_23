@@ -1,3 +1,5 @@
+#include <Adafruit_NeoPixel.h>
+
 #define POTENTIOMETER_IN A0
 #define VIB_SENSOR_PIN 7
 #define VIB_INDICATOR_PIN 0
