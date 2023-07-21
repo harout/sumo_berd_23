@@ -11,6 +11,9 @@ final int LF = 10;
 Serial serialPort;
 float percentage = 0.0;
 
+Button animationAButton;
+Button animationBButton;
+
 
 void setup() {
   frameRate(1500);
@@ -33,32 +36,34 @@ void setup() {
   else
   {
     println("Arduino not found.");
-    exit();
+    //exit();
   }
+  
+  animationAButton = new Button(10, 50, "Play Animation A", 200, 50);
+  animationBButton = new Button(230, 50, "Play Animation B", 200, 50);
 }
 
 
 void draw() {
   background(0);
   
-  // Draw the three circles used for 
-  // making a color selecting
+  animationAButton.draw();
+  animationBButton.draw();
+  
+  // Draw the three circles used for selecting
+  // a color
   noStroke();
-
-  // Draws a red circle at 30, 30
   fill(255, 0, 0);
   circle(30, 30, 25);
   
-  // Draw a blue circle at 80, 30
-  // ????????????
-  // ????????????
+  fill(0, 0, 255);
+  circle(80, 30, 25);
   
-  // Draw an orange cirlce at 130, 30
-  // ????????????
-  // ????????????
+  fill(255, 165, 0);
+  circle(130, 30, 25);
   
   
-  if (serialPort.available() != 0) 
+  if (serialPort != null && serialPort.available() != 0) 
   {
     String read = serialPort.readStringUntil(LF);
     if (read == null)
@@ -75,22 +80,14 @@ void draw() {
     }
   }
 
-  // Determine where the dial should go
-  // Align it with the center of the canvas
-  // and 30 pixels from the bottom
-  // ???????????????????
-  // ???????????????????
-
+  int dialX = (int) (width / 2);
+  int dialY = height - 30;
+  
+  
   push();
   fill(255, 0, 0);
-  
-  // Draw the dial in red
-  // ?????????????????
-
-  // Make the lines we draw for the dial have
-  // stroke wieght of 3
-  // ????????????????
-
+  stroke(255, 0, 0);
+  strokeWeight(3);
   translate(dialX, dialY);
   circle(0, 0, 35);
   rotate(NEGATIVE_HALF_PI + PI_OVER_100 * percentage);
@@ -99,15 +96,37 @@ void draw() {
   pop(); 
 }
 
+void playAnimationA()
+{
+  
+}
+
+void playAnimationB()
+{
+  
+}
+
 
 void mouseClicked()
 {
-  // Replace the question marks with the names of the
-  // variables that tell us where the mouse is
-  color c = intToColor(get(??????, ????????));
+  if (animationAButton.isClickInside(mouseX, mouseY)) 
+  {
+    println("Playing Animation A.");
+    return;
+  }
 
+  if (animationBButton.isClickInside(mouseX, mouseY)) 
+  {
+    println("Playing Animation B.");
+    return;
+  }
+  
+  color c = intToColor(get(mouseX, mouseY));
   byte h = (byte) (100.0 * (hue(c) / 255.0));
-  serialPort.write(h);
+  if (serialPort != null)
+  {
+    serialPort.write(h);  
+  }
 }
 
 color intToColor(int i) {
