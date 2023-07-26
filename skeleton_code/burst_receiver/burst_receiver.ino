@@ -98,7 +98,7 @@ void initBoard()
 
         u8g2->drawStr(0, 10, "TUMO");
         u8g2->drawStr(0, 30, "Burst Sender");
-        u8g2->drawUTF8(0, 50, "");
+        u8g2->drawUTF8(0, 50, "թումո");
         u8g2->sendBuffer();
         //u8g2->setFont(u8g2_font_fur11_tf);
         delay(2000);
