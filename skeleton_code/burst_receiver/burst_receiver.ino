@@ -24,7 +24,7 @@
 #define MIN_SPREADING_FACTOR		5
 #define MAX_SPREADING_FACTOR		12
 #define MAX_CODING_RATE				8
-#define RADIO_BANDWIDTH				500
+#define RADIO_BANDWIDTH				125
 
 #define BOARD_LED                   35
 #define LED_ON                      HIGH
@@ -46,7 +46,7 @@ int transmissionState = RADIOLIB_ERR_NONE;
 
 uint8_t burstMessage[PACKET_LENGTH];
 
-uint8_t spreadingFactor = MIN_SPREADING_FACTOR;
+uint8_t spreadingFactor = 9;
 uint8_t codingRate = MAX_CODING_RATE;
 float bandwidth = RADIO_BANDWIDTH;
 int8_t outputPower = MAX_RADIO_OUTPUT_POWER;

@@ -32,63 +32,6 @@
 #define BUTTON_PIN                  0
 
 
-
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C *u8g2 = nullptr;
-//U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, OLED_SCL, OLED_SDA, OLED_RST);
-
-Ticker ledTicker;
-
-
-void initBoard()
-{
-    SPI.begin(RADIO_SCLK_PIN, RADIO_MISO_PIN, RADIO_MOSI_PIN);
-    Wire.begin(OLED_SDA, OLED_SCL);
-    Serial.begin(115200);
-    delay(2000);
-
-    pinMode(BOARD_LED, OUTPUT);
-    ledTicker.attach_ms(350, []() {
-        static bool level;
-        digitalWrite(BOARD_LED, level);
-        level = !level;
-    });
-
-#if OLED_RST
-    pinMode(OLED_RST, OUTPUT);
-    
-    digitalWrite(OLED_RST, HIGH);
-    delay(50);
-
-    digitalWrite(OLED_RST, LOW);
-    delay(200);
-
-    digitalWrite(OLED_RST, HIGH);
-    delay(50);    
-#endif
-
-    delay(1000);
-
-    Wire.beginTransmission(0x3C);
-    if (Wire.endTransmission() == 0) {
-        u8g2 = new U8G2_SSD1306_128X64_NONAME_F_HW_I2C(U8G2_R0, OLED_RST);
-        u8g2->begin();
-        u8g2->clearBuffer();
-        u8g2->setFlipMode(0);
-        u8g2->setFontMode(1); // Transparent
-        u8g2->setDrawColor(1);
-        u8g2->setFontDirection(0);
-        u8g2->setFont(u8g2_font_t0_11_t_all);
-
-        u8g2->drawStr(0, 10, "TUMO");
-        u8g2->drawStr(0, 30, "Radio Relay");
-        u8g2->drawUTF8(0, 50, "Յարութ");
-        u8g2->sendBuffer();
-        //u8g2->setFont(u8g2_font_fur11_tf);
-        delay(2000);
-    }
-}
-
-
 #define PACKET_LENGTH 32
 #define PACKETS_PER_BURST 100
 
@@ -103,9 +46,12 @@ void initBoard()
 #define RECEIVE_RELAYED_MESSAGE 0x01
 #define RECEIVE_BURST_STATS 0x02
 
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C *u8g2 = nullptr;
+Ticker ledTicker;
+
 
 SX1262 radio = NULL;
-//CircularBuffer cb;
+
 
 // flag to indicate that a packet was sent or received
 volatile bool operationDone = false;
@@ -134,6 +80,56 @@ uint64_t bps = 0;
 unsigned long displayRxStatsAfterTime = 0;
 
 
+void initBoard()
+{
+  SPI.begin(RADIO_SCLK_PIN, RADIO_MISO_PIN, RADIO_MOSI_PIN);
+  Wire.begin(OLED_SDA, OLED_SCL);
+  Serial.begin(115200);
+  delay(2000);
+
+  pinMode(BOARD_LED, OUTPUT);
+  ledTicker.attach_ms(350, []() {
+      static bool level;
+      digitalWrite(BOARD_LED, level);
+      level = !level;
+  });
+
+  #if OLED_RST
+    pinMode(OLED_RST, OUTPUT);
+    
+    digitalWrite(OLED_RST, HIGH);
+    delay(50);
+
+    digitalWrite(OLED_RST, LOW);
+    delay(200);
+
+    digitalWrite(OLED_RST, HIGH);
+    delay(50);    
+  #endif
+
+  delay(1000);
+
+  Wire.beginTransmission(0x3C);
+  if (Wire.endTransmission() == 0) {
+      u8g2 = new U8G2_SSD1306_128X64_NONAME_F_HW_I2C(U8G2_R0, OLED_RST);
+      u8g2->begin();
+      u8g2->clearBuffer();
+      u8g2->setFlipMode(0);
+      u8g2->setFontMode(1); // Transparent
+      u8g2->setDrawColor(1);
+      u8g2->setFontDirection(0);
+      u8g2->setFont(u8g2_font_t0_11_t_all);
+
+      u8g2->drawStr(0, 10, "TUMO");
+      u8g2->drawStr(0, 30, "Radio Relay");
+      u8g2->drawUTF8(0, 50, "Յարութ");
+      u8g2->sendBuffer();
+      //u8g2->setFont(u8g2_font_fur11_tf);
+      delay(2000);
+  }
+}
+
+
 void debugOutput(String lineOne,
                  String lineTwo = "",
                  String lineThree = "",
@@ -155,17 +151,7 @@ void debugOutput(String lineOne,
   }
 }
 
-/*
-void fillScreen()
-{
-  if (u8g2)
-  {
-    u8g2->clearBuffer();
-    u8g2->drawBox(0, 0, 128, 64);
-    u8g2->sendBuffer();
-  }
-}
-*/
+
 
 void displaySettings()
 {
@@ -234,7 +220,6 @@ void setupRadio()
     while (true)
       ;
   }
-
 
   // set spreading factor
   if (radio.setSpreadingFactor(spreadingFactor) != RADIOLIB_ERR_NONE) {

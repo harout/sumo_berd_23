@@ -24,20 +24,32 @@
 #define MIN_SPREADING_FACTOR		5
 #define MAX_SPREADING_FACTOR		12
 #define MAX_CODING_RATE				8
-#define RADIO_BANDWIDTH				125
+#define RADIO_BANDWIDTH				500
 
 #define BOARD_LED                   35
 #define LED_ON                      HIGH
 
+
 #define PACKET_LENGTH 32
-#define PACKETS_PER_BURST 10
+#define PACKETS_PER_BURST 100
 
+#define PREFIX_BYTE 0x00
+#define SUFFIX_BYTE 0xff
+#define NUM_SENTINEL_BYTES 3
 
+#define SET_RADIO_PARAMETERS_COMMAND 0x01
+#define SEND_MESSAGE_BURST_COMMAND 0x02
+#define SEND_TEXT_MESSAGE_COMMAND 0x03
 
+#define RECEIVE_RELAYED_MESSAGE 0x01
+#define RECEIVE_BURST_STATS 0x02
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C *u8g2 = nullptr;
 Ticker ledTicker;
+
+
 SX1262 radio = NULL;
+
 
 // flag to indicate that a packet was sent or received
 volatile bool operationDone = false;
@@ -45,9 +57,11 @@ volatile bool operationDone = false;
 // save transmission states between loops
 int transmissionState = RADIOLIB_ERR_NONE;
 
-uint8_t burstMessage[PACKET_LENGTH];
+// Is this module currently the transmitter or a receiver.
+bool wasTransmitting = false;
 
-uint8_t spreadingFactor = 9;
+uint8_t spreadingFactorIndex = 0;
+uint8_t spreadingFactor = MIN_SPREADING_FACTOR;
 uint8_t codingRate = MAX_CODING_RATE;
 float bandwidth = RADIO_BANDWIDTH;
 int8_t outputPower = MAX_RADIO_OUTPUT_POWER;
@@ -55,19 +69,19 @@ int8_t outputPower = MAX_RADIO_OUTPUT_POWER;
 
 void initBoard()
 {
-    SPI.begin(RADIO_SCLK_PIN, RADIO_MISO_PIN, RADIO_MOSI_PIN);
-    Wire.begin(OLED_SDA, OLED_SCL);
-    Serial.begin(115200);
-    delay(2000);
+  SPI.begin(RADIO_SCLK_PIN, RADIO_MISO_PIN, RADIO_MOSI_PIN);
+  Wire.begin(OLED_SDA, OLED_SCL);
+  Serial.begin(115200);
+  delay(2000);
 
-    pinMode(BOARD_LED, OUTPUT);
-    ledTicker.attach_ms(350, []() {
-        static bool level;
-        digitalWrite(BOARD_LED, level);
-        level = !level;
-    });
+  pinMode(BOARD_LED, OUTPUT);
+  ledTicker.attach_ms(350, []() {
+      static bool level;
+      digitalWrite(BOARD_LED, level);
+      level = !level;
+  });
 
-#if OLED_RST
+  #if OLED_RST
     pinMode(OLED_RST, OUTPUT);
     
     digitalWrite(OLED_RST, HIGH);
@@ -78,28 +92,28 @@ void initBoard()
 
     digitalWrite(OLED_RST, HIGH);
     delay(50);    
-#endif
+  #endif
 
-    delay(1000);
+  delay(1000);
 
-    Wire.beginTransmission(0x3C);
-    if (Wire.endTransmission() == 0) {
-        u8g2 = new U8G2_SSD1306_128X64_NONAME_F_HW_I2C(U8G2_R0, OLED_RST);
-        u8g2->begin();
-        u8g2->clearBuffer();
-        u8g2->setFlipMode(0);
-        u8g2->setFontMode(1); // Transparent
-        u8g2->setDrawColor(1);
-        u8g2->setFontDirection(0);
-        u8g2->setFont(u8g2_font_t0_11_t_all);
+  Wire.beginTransmission(0x3C);
+  if (Wire.endTransmission() == 0) {
+      u8g2 = new U8G2_SSD1306_128X64_NONAME_F_HW_I2C(U8G2_R0, OLED_RST);
+      u8g2->begin();
+      u8g2->clearBuffer();
+      u8g2->setFlipMode(0);
+      u8g2->setFontMode(1); // Transparent
+      u8g2->setDrawColor(1);
+      u8g2->setFontDirection(0);
+      u8g2->setFont(u8g2_font_t0_11_t_all);
 
-        u8g2->drawStr(0, 10, "TUMO");
-        u8g2->drawStr(0, 30, "Burst Sender");
-        u8g2->drawUTF8(0, 50, "");
-        u8g2->sendBuffer();
-        //u8g2->setFont(u8g2_font_fur11_tf);
-        delay(2000);
-    }
+      u8g2->drawStr(0, 10, "TUMO");
+      u8g2->drawStr(0, 30, "Radio Relay");
+      u8g2->drawUTF8(0, 50, "Յարութ");
+      u8g2->sendBuffer();
+      //u8g2->setFont(u8g2_font_fur11_tf);
+      delay(2000);
+  }
 }
 
 
@@ -124,30 +138,6 @@ void debugOutput(String lineOne,
   }
 }
 
-
-void displaySettings(bool isTxing)
-{
-  String pwr = ("TX Powwer: " + std::to_string(outputPower)).c_str();
-
-  String sf = "Spreading Factor: ";
-  sf += std::to_string(spreadingFactor).c_str();
-
-  String cr = "Coding Rate: ";
-  cr += std::to_string(codingRate).c_str();
-
-  String bw = "Bandwidth: ";
-  bw += std::to_string(bandwidth).c_str();
-
-  String freq = "Frequency: ";
-  freq += std::to_string(DEFAULT_FREQUENCY).c_str();
-
-  String currentAction = "Quiet Time";
-  if (isTxing)
-  {
-    currentAction = "Transmitting Now";
-  }
-  debugOutput(pwr, sf, cr, bw, freq, currentAction);
-}
 
 // this function is called when a complete packet
 // is transmitted or received by the module
@@ -229,12 +219,7 @@ void setup()
   initBoard();
 
   // When the power is turned on, a delay is required.
-  delay(1000);
-
-  for (size_t i = 0; i < PACKET_LENGTH; i++)
-  {
-    burstMessage[i] = 0xff;
-  }
+  delay(1500);
 
   debugOutput("Starting up.", "Will bring up radio.");
   delay(1000);
@@ -256,27 +241,90 @@ void txMessage(uint8_t* buffer){
 }
 
 
-void doTxBurst()
-{
-  unsigned long start = millis();
-  for (int i = 0; i < PACKETS_PER_BURST; i++)
-  {
-    int status = radio.transmit(burstMessage, PACKET_LENGTH);
-    delay(50);
 
-    if (status != RADIOLIB_ERR_NONE)
+void checkCommands()
+{
+  // The packet format is <leading sentinel bytes> <command type> <packet> <trailing sentinel bytes>
+  const int messageLength = NUM_SENTINEL_BYTES + 1 + PACKET_LENGTH + NUM_SENTINEL_BYTES;
+
+  if (Serial.available() < messageLength)
+  {
+    return;
+  }
+
+  uint8_t b[messageLength];
+  if (Serial.readBytes(b, messageLength) != messageLength)
+  {
+    Serial.flush();
+    return;
+  }
+
+  for (int i = 0; i < NUM_SENTINEL_BYTES; i++)
+  {
+    if (b[i] != PREFIX_BYTE || b[messageLength - 1 - i] != SUFFIX_BYTE)
     {
-      debugOutput("tx error");
+      Serial.flush();
+      return;
     }
   }
+
+  int offset = NUM_SENTINEL_BYTES;
+
+  uint8_t command = b[offset++];
+  if (command == SEND_TEXT_MESSAGE_COMMAND) 
+  {
+    debugOutput("TX Message");
+    txMessage(&b[offset]);
+    return;
+  }
+    
+  debugOutput("Bad command.");
 }
+
+
+void doRxWork()
+{
+  if (!operationDone)
+  {
+    return;
+  }
+
+  operationDone = false;
+
+  uint8_t buffer[PACKET_LENGTH];
+  int state = radio.readData(buffer, PACKET_LENGTH);
+  uint8_t packetLength = radio.getPacketLength();
+  
+  if (state != RADIOLIB_ERR_NONE)
+  {
+    debugOutput("bad packet?");
+    return;
+  }
+
+  if (packetLength != PACKET_LENGTH)
+  {
+    return;
+  }
+  
+  for (size_t i = 0; i < NUM_SENTINEL_BYTES; i++)
+  {
+    Serial.write(PREFIX_BYTE);
+  }
+
+  Serial.write(RECEIVE_RELAYED_MESSAGE);
+  Serial.write(buffer, PACKET_LENGTH);
+
+  for (size_t i = 0; i < NUM_SENTINEL_BYTES; i++)
+  {
+    Serial.write(SUFFIX_BYTE);
+  }
+
+  debugOutput("relayed message");
+}
+
 
 void loop()
 {
-  displaySettings(true);
-  doTxBurst();
-  
-  displaySettings(false);
-  delay(15000);
+  checkCommands();
+  doRxWork();
 }
-
