@@ -1,9 +1,12 @@
+#include <Arduino.h>
 #include <RadioLib.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Ticker.h>
 #include <U8g2lib.h>
 
+
+#define BUILD_FOR                   "heltec"
 #define OLED_SDA                     17
 #define OLED_SCL                     18
 #define OLED_RST                    21
@@ -28,25 +31,24 @@
 
 
 #define PACKET_LENGTH 32
+#define PACKETS_PER_BURST 100
 
 #define PREFIX_BYTE 0x00
 #define SUFFIX_BYTE 0xff
 #define NUM_SENTINEL_BYTES 3
 
+#define SET_RADIO_PARAMETERS_COMMAND 0x01
+#define SEND_MESSAGE_BURST_COMMAND 0x02
 #define SEND_TEXT_MESSAGE_COMMAND 0x03
 
 #define RECEIVE_RELAYED_MESSAGE 0x01
-
+#define RECEIVE_BURST_STATS 0x02
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C *u8g2 = nullptr;
 Ticker ledTicker;
 
 
 SX1262 radio = NULL;
-
-
-// flag to indicate that a packet was sent or received
-volatile bool operationDone = false;
 
 // save transmission states between loops
 int transmissionState = RADIOLIB_ERR_NONE;
@@ -133,20 +135,6 @@ void debugOutput(String lineOne,
 }
 
 
-// this function is called when a complete packet
-// is transmitted or received by the module
-// IMPORTANT: this function MUST be 'void' type
-//            and MUST NOT have any arguments!
-#if defined(ESP8266) || defined(ESP32)
-  ICACHE_RAM_ATTR
-#endif
-void setFlag(void) {
-  // we sent or received  packet, set the flag
-  operationDone = true;
-}
-
-
-
 void setupRadio()
 {
   radio = new Module(RADIO_CS_PIN,
@@ -200,7 +188,7 @@ void setupRadio()
 
   // set the function that will be called
   // when packet transmission is finished
-  radio.setDio1Action(setFlag);
+  //radio.setDio1Action(setFlag);
 
   radio.startReceive(); 
 }
@@ -224,14 +212,7 @@ void setup()
 
 void txMessage(uint8_t* buffer){
   int status = radio.transmit(buffer, PACKET_LENGTH);
-  radio.finishTransmit();
-
-  // The TX will trigger the operationDone interrupt,
-  // and we would like to not have that appear to be 
-  // a RX done event.
-  operationDone = false;
-
-  radio.startReceive();  
+  radio.finishTransmit(); 
 }
 
 
@@ -276,49 +257,7 @@ void checkCommands()
 }
 
 
-void doRxWork()
-{
-  if (!operationDone)
-  {
-    return;
-  }
-
-  operationDone = false;
-
-  uint8_t buffer[PACKET_LENGTH];
-  int state = radio.readData(buffer, PACKET_LENGTH);
-  uint8_t packetLength = radio.getPacketLength();
-  
-  if (state != RADIOLIB_ERR_NONE)
-  {
-    debugOutput("bad packet?");
-    return;
-  }
-
-  if (packetLength != PACKET_LENGTH)
-  {
-    return;
-  }
-  
-  for (size_t i = 0; i < NUM_SENTINEL_BYTES; i++)
-  {
-    Serial.write(PREFIX_BYTE);
-  }
-
-  Serial.write(RECEIVE_RELAYED_MESSAGE);
-  Serial.write(buffer, PACKET_LENGTH);
-
-  for (size_t i = 0; i < NUM_SENTINEL_BYTES; i++)
-  {
-    Serial.write(SUFFIX_BYTE);
-  }
-
-  debugOutput("relayed message");
-}
-
-
 void loop()
 {
   checkCommands();
-  doRxWork();
 }
