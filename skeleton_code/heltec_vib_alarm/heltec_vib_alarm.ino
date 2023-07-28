@@ -28,7 +28,7 @@
 
 #define PACKET_LENGTH 32
 #define VIBRATION_SENSOR_PIN 46
-#define MY_ID 1
+#define MY_ID 2
 
 SX1262 radio = NULL;
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C *u8g2 = nullptr;
